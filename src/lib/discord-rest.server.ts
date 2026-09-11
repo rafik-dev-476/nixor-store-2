@@ -60,6 +60,89 @@ export function getMe() {
   return discordFetch<{ username: string; id: string }>("/users/@me");
 }
 
+/**
+ * Creates a text channel inside a category with specific permissions.
+ * - User can view and send messages
+ * - Staff role can manage messages
+ * - Bot can manage the channel
+ * - Everyone else cannot view
+ */
+export async function createTicketChannel(
+  guildId: string,
+  categoryId: string,
+  channelName: string,
+  userDiscordId: string,
+  staffRoleId: string,
+  botId: string,
+): Promise<{ id: string; name: string }> {
+  return discordFetch<{ id: string; name: string }>(`/guilds/${guildId}/channels`, {
+    method: "POST",
+    body: JSON.stringify({
+      type: 0, // Text channel
+      name: channelName.toLowerCase().slice(0, 100),
+      parent_id: categoryId,
+      permission_overwrites: [
+        {
+          id: guildId, // @everyone role (guild ID represents @everyone)
+          type: "role",
+          deny: "1024", // VIEW_CHANNEL
+        },
+        {
+          id: userDiscordId,
+          type: "member",
+          allow: "1024", // VIEW_CHANNEL
+        },
+        {
+          id: userDiscordId,
+          type: "member",
+          allow: "4096", // SEND_MESSAGES
+        },
+        {
+          id: userDiscordId,
+          type: "member",
+          allow: "65536", // READ_MESSAGE_HISTORY
+        },
+        {
+          id: staffRoleId,
+          type: "role",
+          allow: "1024", // VIEW_CHANNEL
+        },
+        {
+          id: staffRoleId,
+          type: "role",
+          allow: "4096", // SEND_MESSAGES
+        },
+        {
+          id: staffRoleId,
+          type: "role",
+          allow: "4194304", // MANAGE_MESSAGES
+        },
+        {
+          id: botId,
+          type: "member",
+          allow: "1024", // VIEW_CHANNEL
+        },
+        {
+          id: botId,
+          type: "member",
+          allow: "4096", // SEND_MESSAGES
+        },
+        {
+          id: botId,
+          type: "member",
+          allow: "16", // MANAGE_CHANNELS
+        },
+      ],
+    }),
+  });
+}
+
+/** Gets the current bot's user ID. */
+export async function getBotId(): Promise<string> {
+  const me = await getMe();
+  return me.id;
+}
+
 /** Sends the final answer for a deferred interaction (no bot token needed). */
 export async function followUp(
   applicationId: string,
