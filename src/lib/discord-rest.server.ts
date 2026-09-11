@@ -159,7 +159,7 @@ export async function followUp(
   );
 }
 
-/** Registers the single slash command: /announcement */
+/** Registers slash commands: /announcement and /close */
 export function registerCommands(applicationId: string, guildId: string | null) {
   const commands = [
     {
@@ -193,6 +193,11 @@ export function registerCommands(applicationId: string, guildId: string | null) 
           required: false,
         },
       ],
+    },
+    {
+      name: "close",
+      description: "إغلاق تذكرتك الحالية",
+      options: [],
     },
   ];
   const path = guildId
