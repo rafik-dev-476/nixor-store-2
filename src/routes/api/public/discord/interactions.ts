@@ -104,6 +104,22 @@ async function handleAutocomplete(interaction: Json) {
 }
 
 /**
+ * Generates a ticket number with format: ticket-0001, ticket-0002, etc.
+ */
+async function generateTicketNumber(guildId: string): Promise<number> {
+  const supabase = await db();
+  const { data: lastTicket } = await supabase
+    .from("tickets")
+    .select("number")
+    .eq("guild_id", guildId)
+    .order("number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  
+  return (lastTicket?.number ?? 0) + 1;
+}
+
+/**
  * Handles Order button clicks:
  * - Checks if user already has an open ticket
  * - Creates a new Discord channel inside the configured category
@@ -115,10 +131,9 @@ async function handleOrderButton(
   applicationId: string,
 ): Promise<{ immediate: Response; deferred: boolean }> {
   const userId = interaction.member?.user?.id as string | undefined;
-  const username = interaction.member?.user?.username as string | undefined;
   const guildId = interaction.guild_id as string | undefined;
 
-  if (!userId || !username || !guildId) {
+  if (!userId || !guildId) {
     return {
       immediate: reply("لم نتمكن من التعرف على المستخدم."),
       deferred: false,
@@ -175,8 +190,11 @@ async function handleOrderButton(
       // Get bot ID for permissions
       const botId = await getBotId();
 
+      // Generate ticket number
+      const ticketNumber = await generateTicketNumber(guildId);
+      const channelName = `ticket-${String(ticketNumber).padStart(4, "0")}`;
+
       // Create the ticket channel
-      const channelName = `ticket-${username}`.toLowerCase();
       const channel = await createTicketChannel(
         guildId,
         settings.ticket_category_id,
@@ -193,8 +211,9 @@ async function handleOrderButton(
           guild_id: guildId,
           channel_id: channel.id,
           opener_discord_id: userId,
-          opener_username: username,
+          opener_username: interaction.member?.user?.username,
           status: "open",
+          number: ticketNumber,
         })
         .select()
         .single();
@@ -214,7 +233,7 @@ async function handleOrderButton(
         fields: [
           {
             name: "رقم التذكرة",
-            value: `#${ticket.id.slice(0, 8)}`,
+            value: `#${String(ticketNumber).padStart(4, "0")}`,
             inline: true,
           },
           {
@@ -306,12 +325,12 @@ async function handleComponent(interaction: Json): Promise<Response> {
     const ticketId = customId.split(":")[1];
     const supabase = await db();
 
-    // Check if user is the opener or has staff role
+    // Get user ID
     const userId = interaction.member?.user?.id;
-    const hasStaffRole = (interaction.member?.roles as string[] | undefined)?.some((role) =>
-      role === interaction.guild_id, // This is a simplified check; adjust based on your setup
-    );
+    const userRoles = (interaction.member?.roles as string[] | undefined) ?? [];
+    const guildId = interaction.guild_id as string;
 
+    // Get ticket
     const { data: ticket } = await supabase
       .from("tickets")
       .select("*")
@@ -322,18 +341,34 @@ async function handleComponent(interaction: Json): Promise<Response> {
       return reply("التذكرة غير موجودة.");
     }
 
+    // Get staff role ID from settings
+    const { data: settings } = await supabase
+      .from("guild_settings")
+      .select("staff_role_id")
+      .eq("guild_id", guildId)
+      .maybeSingle();
+
+    const staffRoleId = settings?.staff_role_id;
+    const hasStaffRole = staffRoleId && userRoles.includes(staffRoleId);
+
+    // Check permissions: only ticket opener or staff can close
     if (ticket.opener_discord_id !== userId && !hasStaffRole) {
-      return reply("ليس لديك صلاحية إغلاق هذه التذكرة.");
+      return reply("ليس لديك صلاحية إغلاق هذه التذكرة.", true);
     }
 
     // Update ticket status to closed
-    await supabase
+    const { error } = await supabase
       .from("tickets")
       .update({
         status: "closed",
         closed_at: new Date().toISOString(),
       })
       .eq("id", ticketId);
+
+    if (error) {
+      console.error("Failed to close ticket:", error);
+      return reply("❌ حدث خطأ في إغلاق التذكرة.", true);
+    }
 
     return reply("✅ تم إغلاق التذكرة. شكراً لتواصلك معنا!", false);
   }
