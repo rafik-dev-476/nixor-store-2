@@ -1,4 +1,4 @@
-export type ButtonAction = "url" | "info" | "ack";
+export type ButtonAction = "url" | "info" | "ack" | "order";
 
 export type ButtonStyle = "primary" | "secondary" | "success" | "danger" | "link";
 
@@ -44,6 +44,7 @@ export const ACTION_META: Record<ButtonAction, { label: string; hint: string }> 
   url: { label: "فتح رابط خارجي", hint: "يفتح رابطاً في المتصفح" },
   info: { label: "عرض معلومة", hint: "يرسل بطاقة معلومات للعضو" },
   ack: { label: "رد تأكيد بسيط", hint: "يرسل رسالة تأكيد قصيرة للعضو" },
+  order: { label: "فتح تذكرة Order", hint: "ينشئ قناة خاصة لمعالجة الطلب" },
 };
 
 export function hexToInt(hex: string): number {
